@@ -4,10 +4,64 @@
 #include <math.h>
 #include <string>
 #include <vector>
+#include "Eigen-3.3/Eigen/Dense"
+#include "Eigen-3.3/Eigen/Core"
+#include "Eigen-3.3/Eigen/QR"
 
 // for convenience
 using std::string;
 using std::vector;
+using Eigen::MatrixXd;
+using Eigen::VectorXd;
+
+// Quintic Polynomial Solver
+vector<double> JMT(vector<double> &start, vector<double> &end, double T) {
+  MatrixXd A = MatrixXd(3, 3);
+  A << T*T*T, T*T*T*T, T*T*T*T*T,
+       3*T*T, 4*T*T*T,5*T*T*T*T,
+       6*T, 12*T*T, 20*T*T*T;   
+  MatrixXd B = MatrixXd(3,1);     
+  B << end[0]-(start[0]+start[1]*T+.5*start[2]*T*T),
+       end[1]-(start[1]+start[2]*T),
+       end[2]-start[2];       
+  MatrixXd Ai = A.inverse();
+  MatrixXd C = Ai*B;
+  vector <double> result = {start[0], start[1], .5*start[2]}; 
+  for(int i = 0; i < C.size(); ++i) {
+    result.push_back(C.data()[i]);
+  }
+  return result;
+}
+
+// Trajectory Sample Generator 
+//f(t) = a_0 + a_1 * t + a_2 * t**2 + a_3 * t**3 + a_4 * t**4 + a_5 * t**5
+double point_gen(vector<double> c, double t){
+  double t_2 = t*t; 
+  double t_3 = t_2*t; 
+  double t_4 = t_3*t; 
+  double t_5 = t_4*t; 
+  double f = c[0] + c[1]*t + c[2]*t_2 + c[3]*t_3 + c[4]*t_4 + c[5]*t_5; 
+  return f; 
+}
+
+// Velocty Sample Generator 
+double vel_gen(vector<double> c, double t){
+  double t_2 = t*t; 
+  double t_3 = t_2*t; 
+  double t_4 = t_3*t;
+  double f = c[1] + 2*c[2]*t + 3*c[3]*t_2 + 4*c[4]*t_3 + 5*c[5]*t_4; 
+  return f;
+}
+  
+// Accel Sample Generator 
+double acc_gen(vector<double> c, double t){
+  double t_2 = t*t; 
+  double t_3 = t_2*t; 
+  double t_4 = t_3*t;
+  double f = 2*c[2] + 2*3*c[3]*t + 3*4*c[4]*t_2 + 4*5*c[5]*t_3; 
+  return f;  
+}
+
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
