@@ -99,18 +99,17 @@ int main() {
           
           
           // ###########################################################################
+          /*
           double pos_s;
           double pos_d;
           double pos_x; 
           double pos_y;
           double angle;
           int path_size = previous_path_x.size();
-
           for (int i = 0; i < path_size; ++i) {
             next_x_vals.push_back(previous_path_x[i]);
             next_y_vals.push_back(previous_path_y[i]);
           }
-
           if (path_size == 0) {
             pos_s = car_s;
             pos_d = car_d;  
@@ -131,9 +130,8 @@ int main() {
           double a_max = 9;
           double delta_v_max = a_max*sample_time; // 0.02 [m/s]
           double dist_inc = 0;
-          double v_next_max = 0;   
-           
-          for (int i = path_size; i < 200; ++i) {
+          double v_next_max = 0;     
+          for (int i = path_size; i < 100; ++i) {
             // Adapt dist_inc for each iteration
             double vel = (i+1)*delta_v_max; 
             if (vel > v_max){ vel = v_max; }
@@ -146,9 +144,110 @@ int main() {
             double y_target = pos_xy[1];   
             next_x_vals.push_back(x_target);
             next_y_vals.push_back(y_target);
+          }*/
+          // ###########################################################################
+          
+          
+          
+          
+          
+          
+          
+          
+          // Variable Definitions
+          int number_pts = 100; 
+          double pos_s;
+          double pos_s_dot; 
+          double pos_s_dot_dot; 
+          double pos_d;
+          double pos_x; 
+          double pos_y;
+          double angle;
+          int path_size = previous_path_x.size();
+          vector<double> s_dots (number_pts, 0); 
+          vector<double> s_dots_dots (number_pts, 0); 
+
+          // Write already calculated points back
+          for (int i = 0; i < path_size; ++i) {
+            next_x_vals.push_back(previous_path_x[i]);
+            next_y_vals.push_back(previous_path_y[i]);
           }
 
-          // ###########################################################################
+          vector<double> coeff_s(6, 0);   
+          // Distinguish start from running mode
+          if (path_size == 0) {
+            pos_s = car_s;
+            pos_s_dot = 0; 
+            pos_s_dot_dot = 0; 
+            pos_d = car_d;
+            coeff_s[1] = 0; 
+            coeff_s[2] = 1; 
+            coeff_s[3] = 0; 
+            coeff_s[4] = 0; 
+            coeff_s[5] = 0;   
+          } 
+          else {
+            pos_x = previous_path_x[path_size-1];
+            pos_y = previous_path_y[path_size-1];
+            double pos_x2 = previous_path_x[path_size-2];
+            double pos_y2 = previous_path_y[path_size-2];
+            angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
+            vector<double> pos_sd = getFrenet(pos_x, pos_y, angle, map_waypoints_x, map_waypoints_y); 
+            pos_s = pos_sd[0]; 
+            pos_d = pos_sd[1]; 
+            pos_s_dot = s_dots[path_size - 1]; 
+            pos_s_dot_dot = s_dots_dots[path_size - 1];
+            coeff_s[1] = 1; 
+            coeff_s[2] = 0; 
+            coeff_s[3] = 0; 
+            coeff_s[4] = 0; 
+            coeff_s[5] = 0;  
+          }
+
+          // Define conditions for trajectory generation
+          double v_max = 20; // [m/s]
+          double sample_time = 0.1;
+          double duration = 10;  
+          vector<double> s_i = {pos_s, pos_s_dot, pos_s_dot_dot}; 
+          vector<double> s_f = {pos_s + 50, v_max, 0};  
+          //vector <double> coeff_s = JMT(s_i, s_f, duration); 
+          coeff_s[0] = pos_s; 
+          cout << endl << "Use the following trajectory coefficients" << endl; 
+          for (auto c : coeff_s){
+            cout << c << " "; 
+          }
+          cout << endl;   
+
+          // Use min jerk trajectory coefficients to sample points     
+          cout << endl << "Pushing " << number_pts - path_size << "Elements to the list" << endl; 
+          for (int i = 0; i < (number_pts - path_size); ++i) {
+            // Sample s points
+            double s = point_gen(coeff_s, (i+1)*sample_time); 
+            cout << s << " "; 
+            // Sample velocity and update corresponding vector
+            double s_dot = vel_gen(coeff_s, (i+1)*sample_time);
+            s_dots.push_back(s_dot);
+            s_dots.erase(s_dots.begin());     
+            // Sample acceleration and update corresponding vector
+            double s_dot_dot = acc_gen(coeff_s, (i+1)*sample_time); 
+            s_dots_dots.push_back(s_dot_dot);
+            s_dots_dots.erase(s_dots_dots.begin()); 
+
+            // Transform back to x and y space 
+            // Push values to next_vals vector
+            vector<double> pos_xy = getXY(s, pos_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            double x_target = pos_xy[0]; 
+            double y_target = pos_xy[1];   
+            next_x_vals.push_back(x_target);
+            next_y_vals.push_back(y_target);
+          }
+
+         
+
+        
+          
+
+
 
 
           msgJson["next_x"] = next_x_vals;
