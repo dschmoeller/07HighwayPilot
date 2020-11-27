@@ -126,8 +126,18 @@ int main() {
             pos_d = pos_sd[1]; 
           }
 
-          double dist_inc = 0.2;
-          for (int i = 0; i < 200-path_size; ++i) {
+          double sample_time = 0.02; 
+          double v_max = 20;
+          double a_max = 9;
+          double delta_v_max = a_max*sample_time; // 0.02 [m/s]
+          double dist_inc = 0;
+          double v_next_max = 0;   
+           
+          for (int i = path_size; i < 200; ++i) {
+            // Adapt dist_inc for each iteration
+            double vel = (i+1)*delta_v_max; 
+            if (vel > v_max){ vel = v_max; }
+            dist_inc = vel*sample_time; 
             // Increment pos_s in each iteration
             pos_s += dist_inc;
 
