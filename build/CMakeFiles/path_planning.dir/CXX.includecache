@@ -1137,4 +1137,16 @@ helpers.h
 /home/schmoeldo/UdacitySelfDrivingCarEngineer/highwayPilot/07HighwayPilot/src/helpers.h
 json.hpp
 /home/schmoeldo/UdacitySelfDrivingCarEngineer/highwayPilot/07HighwayPilot/src/json.hpp
+spline.h
+/home/schmoeldo/UdacitySelfDrivingCarEngineer/highwayPilot/07HighwayPilot/src/spline.h
+
+/home/schmoeldo/UdacitySelfDrivingCarEngineer/highwayPilot/07HighwayPilot/src/spline.h
+cstdio
+-
+cassert
+-
+vector
+-
+algorithm
+-
 
