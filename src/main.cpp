@@ -17,17 +17,17 @@ using std::cout;
 using std::endl; 
 
 
-// Define reference velocity and desired AV lane
-int number_pts = 100;
-int av_lane = 1; // Middle lane
+// Highway Planner Variables
+int number_pts = 100; // Defines length of trajectory
+int av_lane = 1; // Middle lane 
 double av_ref_vel = 0; // [m/s]
 double av_max = 22; // [m/s]
-double a_max = 0.1; // [m/ss]
+double a_max = 0.15; // [m/ss]
 int state = 0;
 bool lock_LC = false; 
-unsigned long cnt = 0; 
-//bool pass_completed = true; 
-//double pass_target_d = 0; 
+unsigned long cnt = 0;
+double av_pass_vel_min = 15; // [m/s] 
+
 
 int main() {
   uWS::Hub h;
@@ -110,7 +110,8 @@ int main() {
           vector<double> next_x_vals;
           vector<double> next_y_vals;
           
-          // (1) Variable Definitions 
+          // H I G H W A Y   P L A N N E R   L O G I C ##############################
+          // Variable Definitions 
           int path_size = previous_path_x.size();
           // For building splines
           vector<double> spline_points_x; 
@@ -119,89 +120,80 @@ int main() {
           double start_ref_y = car_y; 
           double start_ref_yaw = deg2rad(car_yaw); 
 
-          // (2) Write already calculated points back from previous iteration
+          // Write already calculated points back from previous iteration
           // and increment speed if v_desired hasn't reached 
           for (int i = 0; i < path_size; ++i) {
             next_x_vals.push_back(previous_path_x[i]);
             next_y_vals.push_back(previous_path_y[i]);
           }
 
-          // (3) Set AV state
-          //     --> 1: Keep Lane
-          //     --> 2: Track Behind
-          //     --> 3: Pass Left
-          //     --> 4: Pass Right
-          
           // Collision Checker
           bool collision = false; 
           for (auto actor : sensor_fusion){
             double actor_s = actor[5]; 
             double actor_d = actor[6]; 
-            // Is the actor in the AVs lane
+            // Is the actor in the AVs lane?
             double left_lane_bound = 4*av_lane; 
             double right_lane_bound = 4 + 4*av_lane; 
             if (actor_d > left_lane_bound && actor_d < right_lane_bound){
               // Check for future collision, i.e. at the end of AVs trajectory
               // Do not consider cars in the back 
-              if (actor_s > car_s && actor_s < end_path_s ){
-                //cout << "Future collision with car " << actor[0] << endl; 
+              if (actor_s > car_s && actor_s < end_path_s ){ 
                 collision = true; 
               } 
             }
-          } 
-          // Pass left or Pass right possible?
-          // It's always preferable to pass left  
+          }
+
+          // Is is possible to change lanes?  
           if (collision == true){
             // Check if lane change is still locked
             if (cnt > 100){
               lock_LC = false; 
             }  
-
-            // Check whether it is possible to pass left
+            // Is it possible to do a left lane change?
             bool pass_left = true;
             int desired_av_lane_left = av_lane - 1; 
             if (desired_av_lane_left < 0){ 
+              // AV is already in the most left lane
               // Change lane left is not possible
               pass_left = false;  
             }
-            // It possible to change, check if it is safe to go
+            // Check whether it's safe to change lane left
             else {
               for (auto actor : sensor_fusion){
-                // Check whether there are cars on the desired AV lane
                 double actor_s = actor[5]; 
                 double actor_d = actor[6]; 
-                // Is the actor in the desired AV lane
+                // Is this actor in the desired AV lane? 
                 double left_lane_bound = 4*desired_av_lane_left; 
                 double right_lane_bound = 4 + 4*desired_av_lane_left;
                 if (actor_d > left_lane_bound && actor_d < right_lane_bound){
                   // Check whether this car occupies space nearby the AV
-                  double safety_distance = 25; 
+                  double safety_distance = 30; 
                   if (actor_s > car_s - safety_distance && actor_s < car_s + safety_distance ){
                     pass_left = false; 
-                    //cout << "Not safe to pass left due to car " << actor[0] << endl; 
                   }
                 }
               }
             } 
-            
-            // Check whether it is possible to pass right
+            // Is it possible to do a right lane change?  
             bool pass_right = true;
             int desired_av_lane_right = av_lane + 1; 
             if (desired_av_lane_right > 2){ 
+              // AV is already in the most right lane
+              // Change lane right is not possible
               pass_right = false; 
             }
-            // It is possible to change, check if it safe go 
+            // Check whether it's safe to change lane right
             else {
               for (auto actor : sensor_fusion){
-                // Check whether there are cars on the desired AV lane
                 double actor_s = actor[5]; 
                 double actor_d = actor[6]; 
-                // Is the actor in the desired AV lane
+                // Is this actor in the desired AV lane?
                 double left_lane_bound = 4*desired_av_lane_right; 
                 double right_lane_bound = 4 + 4*desired_av_lane_right;
                 if (actor_d > left_lane_bound && actor_d < right_lane_bound){
                   // Check whether this car occupies space nearby the AV
-                  double safety_distance = 25; 
+                  double safety_distance = 30; 
                   if (actor_s > car_s - safety_distance && actor_s < car_s + safety_distance ){
                     pass_right = false;  
                   }
@@ -209,24 +201,24 @@ int main() {
               }
             }
             
-            // Adapt corresponding AV states 
-            if (pass_left == true && lock_LC == false){ state = 3; }
-            else if (pass_right == true && lock_LC == false){ state = 4; }
-            // If it is not possible to pass, brake
-            else { state = 2; }
+            // Adapt AV states
+            //    --> State 1: Keep Lane
+            //    --> State 2: Track Behind (i.e. Brake)
+            //    --> State 3: Pass Left
+            //    --> State 4: Pass Right
+            // Only change lanes if AV speed is high enough!   
+            if (pass_left == true && lock_LC == false && car_speed > av_pass_vel_min){ state = 3; }
+            else if (pass_right == true && lock_LC == false && car_speed > av_pass_vel_min){ state = 4; }
+            else { state = 2; } // If it is not possible to pass, brake
           }
-          // No collision predicted
-          else {
-            state = 1; // Keep lane 
-          } 
-          //cout << "State: " << state << endl; 
-
-          // (4) Execute corresponding state action
+          // If there's no collision predicted, just keep lane
+          else { state = 1; } 
+         
+          // Execute corresponding state actions
           // Increment speed if v_max hasn't reached yet and the AV isn't supposed to brake
           if (state != 2 && av_ref_vel < av_max){ av_ref_vel += a_max; }
-          
           // Either change lanes left/right or brake
-          // Check whether previous pass maneuver is done
+          // It's always preferable to do a left lane change
           if (state == 3){
             av_lane -= 1;
             if (av_lane < 0){
@@ -235,27 +227,24 @@ int main() {
             // Lock lane changes for next iterations
             lock_LC = true;
             cnt = 0;
-            cout << "3 CL --> Set AV lane to " << av_lane << "reset counter to " << cnt << endl;   
           }
           else if (state == 4 ){
             av_lane += 1;
             if (av_lane > 2){
               av_lane = 2; 
             }
-            // Lock lane changes for next interations
+            // Lock lane changes for next iterations
             lock_LC = true; 
             cnt = 0;
-            cout << "4 CR --> Set AV lane to " << av_lane << "reset counter to " << cnt << endl;  
           }
           // Brake (i.e. decrease reference velocity 
           else if (state == 2) { 
             av_ref_vel -= a_max; 
           }
-          
           // Increment Lane Change Counter
           cnt ++; 
 
-          // (5) Set two starting anchor points for spline calculation
+          // Set two starting anchor points for spline calculation
           // Distinguish inital starting mode and running mode
           if (path_size < 2) { 
             // Identify (assumed) previous point as anchor point for the spline
@@ -281,10 +270,10 @@ int main() {
             spline_points_y.push_back(start_ref_y); 
           }
 
-          // (5) Add three more far away waypoints in order to define the splines
-          double waypoint1 = 90.0; 
+          // Add three more far away waypoints in order to define the splines
+          double waypoint1 = 70.0; 
           double waypoint2 = 100.0; 
-          double waypoint3 = 120.0; 
+          double waypoint3 = 130.0; 
           vector<double> wp1 = getXY(car_s + waypoint1, (2+4*av_lane), map_waypoints_s, map_waypoints_x, map_waypoints_y); 
           vector<double> wp2 = getXY(car_s + waypoint2, (2+4*av_lane), map_waypoints_s, map_waypoints_x, map_waypoints_y); 
           vector<double> wp3 = getXY(car_s + waypoint3, (2+4*av_lane), map_waypoints_s, map_waypoints_x, map_waypoints_y); 
@@ -295,7 +284,7 @@ int main() {
           spline_points_y.push_back(wp2[1]);
           spline_points_y.push_back(wp3[1]);
           
-          // (5) Transform all five waypoints from global into AV coordinate system
+          // Transform all five waypoints from global into AV coordinate system
           // Applying rotation and translation
           for (int i = 0; i < spline_points_x.size(); i++){
             // Translation
@@ -306,11 +295,11 @@ int main() {
             spline_points_y[i] = (shift_x*sin(0-start_ref_yaw) + shift_y*cos(0-start_ref_yaw));  
 
           }
-          // (6) Define the spline
+          // Define the spline
           tk::spline s; 
           s.set_points(spline_points_x, spline_points_y); 
 
-          // (7) Use spline to sample points onto the trajectory   
+          // Use spline to sample points onto the trajectory   
           // Linearize spline in order to calculate incremental x values dependend on desired velocity
           double target_x = waypoint1; 
           double target_y = s(target_x); 
@@ -337,13 +326,10 @@ int main() {
             next_x_vals.push_back(x_point);
             next_y_vals.push_back(y_point);
           }
-         /*
-          cout << "Points on next_x_vals are: "; 
-          for (auto x : next_x_vals){
-            cout << x << " "; 
-          }
-          cout << endl; */
-      
+          // H I G H W A Y   P L A N N E R   L O G I C ##############################
+          
+          
+          
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
