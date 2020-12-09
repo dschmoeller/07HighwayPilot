@@ -168,7 +168,7 @@ int main() {
                 double right_lane_bound = 4 + 4*desired_av_lane_left;
                 if (actor_d > left_lane_bound && actor_d < right_lane_bound){
                   // Check whether this car occupies space nearby the AV
-                  double safety_distance = 30; 
+                  double safety_distance = 20; 
                   if (actor_s > car_s - safety_distance && actor_s < car_s + safety_distance ){
                     pass_left = false; 
                   }
@@ -193,7 +193,7 @@ int main() {
                 double right_lane_bound = 4 + 4*desired_av_lane_right;
                 if (actor_d > left_lane_bound && actor_d < right_lane_bound){
                   // Check whether this car occupies space nearby the AV
-                  double safety_distance = 30; 
+                  double safety_distance = 20; 
                   if (actor_s > car_s - safety_distance && actor_s < car_s + safety_distance ){
                     pass_right = false;  
                   }
